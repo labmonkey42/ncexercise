@@ -59,23 +59,25 @@ If ($webRules.Count -lt 1) {
 }
 
 If (Test-Path env:AWS_KEY_NAME) {
-    # Use key file from environment if present.
-    $ncadminKeyFile = $env:AWS_KEY_NAME
+    # Use key name from environment if present.
+    $ncadminKeyName = $env:AWS_KEY_NAME
 } Else {
-    # Use key file in script location if not in environment.
-    $ncadminKeyFile = [System.IO.Path]::Combine(
-        $PSScriptRoot,
-        "ncadminKeyPair.pem"
-    )
+    $ncadminKeyName = "ncadminKeyPair"
 }
-If (not (Test-Path $ncadminKeyFile)) {
+$ncadminKeyFile = [System.IO.Path]::Combine(
+    $PSScriptRoot,
+    "$ncadminKeyName.pem"
+)
+If (-Not (Test-Path $ncadminKeyFile)) {
     # Key file not found; create it.
-    $ncadminKeyPair = Get-EC2KeyPair -KeyName ncadminKeyPair
-    If ($ncadminKeyPair -eq $null) {
-        # KeyPair does not exist in EC2.
-        $ncadminKeyPair = New-EC2KeyPair -KeyName ncadminKeyPair
-        $ncadminKeyPair.KeyMaterial | Out-File -Encoding ascii $ncadminKeyFile
+    $ncadminKeyPair = Get-EC2KeyPair -KeyName $ncadminKeyName
+    If ($ncadminKeyName -ne $null) {
+        Remove-EC2KeyPair -KeyName $ncadminKeyName -Force
     }
+
+    # KeyPair does not exist in EC2.
+    $ncadminKeyPair = New-EC2KeyPair -KeyName $ncadminKeyName
+    $ncadminKeyPair.KeyMaterial | Out-File -Encoding ascii $ncadminKeyFile
 }
 # Generate public key from private for ssh authorized_keys.
 $ncadminPublicKey = Invoke-Expression -Command "ssh-keygen -y -f $ncadminKeyFile"
@@ -158,5 +160,4 @@ while ([String]::IsNullOrWhiteSpace($instance.PublicIpAddress) -or [String]::IsN
 Write-Output "A new instance has started provisioning."
 Write-Output "This instanced can be accessed with the following information:"
 Write-Output "    URL: http://$($instance.PublicDnsName)/"
-Write-Output "    SSH: $($instance.PublicDnsName)"
-Write-Output "    SSK Key File: $ncadminKeyFile"
+Write-Output "    SSH: ssh -i $ncadminKeyFile ncadmin@$($instance.PublicDnsName)"
